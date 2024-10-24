@@ -1,81 +1,78 @@
 # Dynaseal
 
-[中文](https://github.com/IntelliKernel/Dynaseal/blob/main/README_cn.md)
+## Why this project was created
 
-## Why This Project Exists
+Imagine a future where LLM agents are widely deployed on edge devices. But currently, the way to call a large model is through an API key that anyone can use once they have it. What if users get the API key from the model on their device and can spam your services, skyrocketing your costs? If each user runs multiple agents on their phone, and you have a large user base, your servers could be overwhelmed, even worse than a DDoS attack! With DDoS, at least your service is disrupted, but in this case, your legitimate business is still running while your servers get flooded.
 
-Imagine a future where LLM agents are fully deployed on the client-side. However, currently, calling large models is done through an API key that can be used freely once obtained. Wouldn’t that mean users could grab the API key from the client-side models and rack up your bill?!!! If every phone is running multiple agents, and you have a large number of users, wouldn’t your servers be worse off than being hit by a DDoS attack? Because a DDoS prevents you from providing services, but in this case, your regular business is still running while you're being overwhelmed!
+Thus, we propose [Dynaseal](https://github.com/IntelliKernel/Dynaseal), a future-oriented backend framework for managing LLM model calls from edge-side agents. It uses a dynamic token system similar to OSS, which restricts the models, parameters, and token lifetimes available to edge agents. It also supports direct communication between edge devices and large model service providers, and after each response, it triggers a callback to inform your backend of the transaction. We welcome any feedback and contributions; feel free to star our project!
 
-Therefore, we’ve proposed Dynaseal, a server-side framework designed for future client-side agent model calls. It uses a dynamic token similar to OSS, limiting the models and parameters the client-side agents can call and controlling token lifespan. It allows client-side agents to communicate directly with large model service providers and notifies your business backend through a callback after the response is complete. We welcome feedback and star.
-
-> Please note that this project is just a demo, implementing our design for dynamically distributing API keys from the client side to request large model responses. The large model part is designed as a wrapper for a large model server in the format of the OpenAI API. For client-side requests, we only perform simple key integrity checks and parameter validation. The callback for the end of the request only implements printing to the terminal.
+> Please note that this project is just a demo. It implements our concept of dynamically distributing API keys for edge-side large model requests. The large model part is designed as a wrapper around an OpenAI-style large model server. On the client-side, we only implement basic integrity and parameter validation checks for keys. Callback functionality is limited to printing the results on the terminal.
 
 ## System Design
 
-The architecture is divided into three parts: the LLM server, the backend, and the client.
+The architecture consists of three components: the LLM server, the backend, and the client.
 
-1. **Backend Initialization**: The backend requests a large model API key from the LLM server.
-2. **Client Initialization**: The client requests authentication from the backend's business interface. After passing, the backend returns a dynamic key, specifying the model, token, request address, and other basic information.
-3. **Client Requests Model**: The client uses the dynamic key to request the model from the large model server.
-4. **LLM Server Processes Request**: The LLM server unpacks the dynamic key, determines the identity, and generates and returns the response.
-5. **LLM Server Notifies Backend**: The LLM server notifies the backend of the client's request and response through a callback.
+1. The backend initializes by requesting the LLM server for an API key to access the large model.
+2. The client initializes by requesting authentication from the backend. The backend returns a dynamic key specifying the model, token, request address, and other essential details.
+3. The client uses the dynamic key to request the model from the LLM server.
+4. The LLM server unpacks the dynamic key, verifies the identity, and returns a response.
+5. The LLM server notifies the backend via a callback about the client’s request and the response.
 
-![](https://cdn.studyinglover.com/pic/2024/10/e29ae616dcd9ea47249028aa91645930.png)
+![](https://cdn.studyinglover.com/pic/2024/10/63d54f64144c49f3a7eee41ab45380c7.png)
 
 ```mermaid
 sequenceDiagram
-    participant 后端 as 后端
-    participant 客户端 as 客户端
-    participant LLM服务端 as LLM服务端
+    participant Backend as Backend
+    participant Client as Client
+    participant LLM_Server as LLM Server
 
-    Note over 后端: 初始化
-    后端->>LLM服务端: 请求大模型api-key
-    LLM服务端-->>后端: 返回api-key
+    Note over Backend: Initialization
+    Backend->>LLM_Server: Request large model API key
+    LLM_Server-->>Backend: Return API key
 
-    Note over 客户端: 初始化
-    客户端->>后端: 请求业务鉴权
-    后端-->>客户端: 返回动态key, 包括可调用的模型, token等
+    Note over Client: Initialization
+    Client->>Backend: Request authentication
+    Backend-->>Client: Return dynamic key, including allowed model, token, etc.
 
-    客户端->>LLM服务端: 使用动态key请求模型
-    LLM服务端->>LLM服务端: 解包动态key, 确定身份
-    LLM服务端-->>客户端: 返回响应
+    Client->>LLM_Server: Use dynamic key to request model
+    LLM_Server->>LLM_Server: Unpack dynamic key, verify identity
+    LLM_Server-->>Client: Return response
 
-    LLM服务端->>后端: 通知客户端的请求和响应
-
+    LLM_Server->>Backend: Notify of client request and response
 ```
 
 ## Dynamic Key Design
 
-The dynamic key is designed as a JWT token, i.e., `header.payload.secret`.
+The dynamic key is designed as a JWT token in the format: `header.payload.secret`.
 
-- **header**
-- **payload**: First, generate a JSON in the following format, then package it into the JWT payload.
+- **Header**
+- **Payload**: First, a JSON object like the one below is created and packed into the JWT payload:
 
 ```json
 {
-  "api-key": 111, // ID of the user registered by the backend on the LLM server, note that it is the ID, not the key given by the LLM server
-  "model": "deepseek-chat", // Model name that the client side can call
-  "max_tokens": 100, // Maximum number of tokens that can be called
-  "expiring": 111, // Expiration time, using Unix timestamp
-  "event_id": 111 // Event ID, used to represent this token, the LLM server will include this event_id in the response after completing the request
+  "api-key": 111, // The user ID registered by the backend on the LLM server. Note, it's the ID, not the key given by the LLM server.
+  "model": "deepseek-chat", // The model name that the client is allowed to call
+  "max_tokens": 100, // Maximum number of tokens that can be used
+  "expiring": 111, // Expiration time using Unix timestamp
+  "event_id": 111 // Event ID, used to identify this token. After the LLM server responds to the request, this ID will be included in the callback
 }
 ```
 
-- **secret**: Encrypted using the key obtained by the backend from the LLM server, the LLM server will use this part to verify the legality of the dynamic key.
+- **Secret**: This is encrypted using the key that the backend registered with the LLM server, and the LLM server will use it to verify if the dynamic key is valid.
 
 ## Implementation Details
 
-### Folder Explanation
+### Folder Structure
 
-- **llm-server**: The large model backend, the server we usually call in normal use, with our design added on top of the regular API calls—authentication and response for dynamic keys.
-- **backend**: The business backend, the backend provided by companies/individuals who have purchased the large model API key, which can authenticate the client side and then distribute dynamic keys.
-- **client**: The client side, where agents run.
+- **llm-server**: The large model backend, which functions as the server we typically use. It adds our design on top of regular API calls, implementing dynamic key verification and response handling.
+- **backend**: The business backend, which provides services for companies or individuals who purchased large model API keys. It also handles client authentication and issues dynamic keys.
+- **client**: The edge device running the agent.
 
 ### Database Creation
 
 #### LLM Server
 
-Create a user under the `User` table as follows. The user's account and password are `user1:user1`.
+Create the following user in the `User` table. The user credentials are `user1:user1`:
 
 ```json
 {
@@ -100,7 +97,7 @@ Create a user under the `User` table as follows. The user's account and password
 
 #### Business Backend
 
-Create a user under the `User` table as follows. The user's account and password are `client1:client1`.
+Create the following user in the `User` table. The user credentials are `client1:client1`:
 
 ```json
 {
@@ -119,96 +116,100 @@ Create a user under the `User` table as follows. The user's account and password
 #### LLM Server
 
 ```
-SECRET_KEY // JWT secret key
-ALGORITHM // JWT encryption algorithm
-ACCESS_TOKEN_EXPIRE_MINUTES // JWT access token expiration time
-REFRESH_TOKEN_EXPIRE_MINUTES // JWT refresh token expiration time
-MONGODB_URL // MongoDB address
-MONGODB_DB // MongoDB database name
-ADMIN_USER_PASSWORD // Administrator password
-OPENAI_BASE_URL // Wrapped OpenAI base URL
-OPENAI_API_KEY // Wrapped OpenAI API key
+SECRET_KEY  // JWT secret
+ALGORITHM  // JWT encryption algorithm
+ACCESS_TOKEN_EXPIRE_MINUTES  // JWT access token expiration time
+REFRESH_TOKEN_EXPIRE_MINUTES  // JWT refresh token expiration time
+MONGODB_URL  // MongoDB URL
+MONGODB_DB  // MongoDB database name
+ADMIN_USER_PASSWORD  // Admin password
+OPENAI_BASE_URL  // OpenAI base URL for wrapping
+OPENAI_API_KEY  // OpenAI API key for wrapping
 ```
 
 #### Business Backend
 
-LLM_USER_ID is the ID of the user registered by the business backend on the LLM server, and LLM_KEY is the key obtained by the user registered by the business backend on the LLM server.
+LLM_USER_ID is the user ID registered by the backend on the LLM server, and LLM_KEY is the key the backend obtained.
 
 ```
-SECRET_KEY // JWT secret key
-ALGORITHM // JWT encryption algorithm
-ACCESS_TOKEN_EXPIRE_MINUTES // JWT access token expiration time
-REFRESH_TOKEN_EXPIRE_MINUTES // JWT refresh token expiration time
-MONGODB_URL // MongoDB address
-MONGODB_DB // MongoDB database name
-ADMIN_USER_PASSWORD // Administrator password
+SECRET_KEY  // JWT secret
+ALGORITHM  // JWT encryption algorithm
+ACCESS_TOKEN_EXPIRE_MINUTES  // JWT access token expiration time
+REFRESH_TOKEN_EXPIRE_MINUTES  // JWT refresh token expiration time
+MONGODB_URL  // MongoDB URL
+MONGODB_DB  // MongoDB database name
+ADMIN_USER_PASSWORD  // Admin password
 LLM_KEY = "4d72c063-881f-45fa-85ab-3375c84f5dd7"
 LLM_USER_ID = "671249a93f1cf2f8bf9b2b82"
 ```
 
-### Interface Conventions
+### API Agreements
 
 - `llm_server_url`: http://127.0.0.1:8000
 - `backend_url`: http://127.0.0.1:9000
 
 - `backend_url/user/login`: User login
-  - **data**
+  - Data:
     - username
     - password
-  - **response**
-    - access_token: Token needed for subsequent interaction with the business backend
+  - Response:
+    - access_token: Token needed for subsequent interactions with the backend
     - refresh_token: Used to refresh the access token
     - token_type
-- `backend/key/create`: Generate dynamic key
-  - **header**
+- `backend/key/create`: Generate a dynamic key
+
+  - Header:
     - bearer
-  - **response**
-    - token: Dynamic key, used as the dynasealtoken request header when interacting with the LLM server
-- `llm_server_url/client-side/chat/completions`: Request large model, this request will verify the client-side request, and inappropriate requests will throw errors
-  - **header**
+  - Response:
+    - token: The dynamic key used in the `dynasealtoken` header for LLM server requests
+
+- `llm_server_url/client-side/chat/completions`: Request the large model. This request verifies client-side parameters, and inappropriate requests will trigger errors.
+
+  - Header:
     - dynasealtoken
-  - **body**
-    Same as OpenAI format
-  - **response**
-    Same as OpenAI format
-- `backend_url/callback/usage`: Callback interface, after the LLM server responds to the client-side request, the LLM server will send a request to inform the business backend of the content and token count of this request
-  - event_id: Event ID of the dynamic key
-  - content: Content of the large model response
-  - tokens: Number of tokens consumed by the large model
+  - Body: Same format as OpenAI
+  - Response: Same format as OpenAI
 
-## Starting the Project
+- `backend_url/callback/usage`: Callback interface, called after the LLM server processes the client request. The LLM server informs the backend about the request content and the tokens used.
+  - event_id: The event ID from the dynamic key
+  - content: The response content from the large model
+  - tokens: The number of tokens consumed by the request
 
-1. Start the LLM server
+## How to Run the Project
+
+1. Start the LLM server:
 
 ```
 cd llm-server
 python main.py
 ```
 
-2. Start the business backend
+2. Start the business backend:
 
 ```
 cd backend
 python main.py
 ```
 
-3. Run the client to check if the call is successful
+3. Run the client and check if the request is successful:
 
 ```
 cd client
 python request_side.py
 ```
 
-After successful operation, the client terminal can output streamingly, and the backend terminal will print `event_id`, `content`, and `tokens`.
+If successful, the client terminal will display streaming output, and the backend terminal will print `event_id`, `content`, and `tokens`.
 
-Client terminal
+Client terminal:
 ![](https://cdn.studyinglover.com/pic/2024/10/708c69e378fb777d55fa159b378c8d2e.png)
 
-Backend terminal
-![](https://cdn.studyinglover.com/pic/2024/10/782aff898b90131833f310e75871f50c.png)
+Backend terminal:
+![](https://cdn.studyinglover.com/pic/2024/
 
-## Not Implemented
+10/782aff898b90131833f310e75871f50c.png)
 
-- [ ] Store callback requests in the database
-- [ ] LLM server registration and backend registration
+## Unimplemented Features
+
+- [ ] Callback requests stored in the database
+- [ ] LLM server and backend registration
 - [ ] ...
