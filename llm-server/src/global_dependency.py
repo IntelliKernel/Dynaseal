@@ -36,12 +36,16 @@ def decode_base64url(data):
     return base64.b64decode(data)
 
 
-async def get_dynaseal_token(dynasealtoken: str = Header(None)):
+async def get_dynaseal_token(Authorization: str = Header(None)):
     try:
-        if not dynasealtoken:
+        if not Authorization:
             raise credentials_exception
+
+        # Authorization是bearer开头的，去掉bearer
+        Authorization = Authorization[7:]
+
         # token格式为header.payload.signature，payload是{"api-key": id,"model": "deepseek-chat","max_token": 100,"expiring": time.time() + 15,}生成的，取出api-key
-        header, payload, signature = dynasealtoken.split(".")
+        header, payload, signature = Authorization.split(".")
         # base64解码payload
         # payload = {
         # "api-key": settings.llm_user_id,
@@ -57,7 +61,7 @@ async def get_dynaseal_token(dynasealtoken: str = Header(None)):
         user_keys = [key.api_key for key in user.api_keys]
         for key in user_keys:
             # 用key验证token
-            if jwt.decode(dynasealtoken, key, algorithms=[os.environ["ALGORITHM"]]):
+            if jwt.decode(Authorization, key, algorithms=[os.environ["ALGORITHM"]]):
                 return Token(
                     api_key=user_id,
                     model=payload.get("model"),

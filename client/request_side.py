@@ -1,6 +1,7 @@
 import json
 from time import sleep
 import requests
+from openai import OpenAI
 
 backend_url = "http://localhost:9000/api/v1"
 llm_server_url = "http://localhost:8000/api/v1"
@@ -39,7 +40,7 @@ client_token = requests.post(
 
 token = client_token["token"]
 
-header = {"dynasealtoken": token}
+header = {"Authorization": token}
 
 payload = {
     "model": "deepseek-chat",
@@ -53,24 +54,28 @@ payload = {
     "stream": True,
 }
 
+client = OpenAI(base_url=llm_server_url, api_key=token)
+response = client.chat.completions.create(**payload)
+for chunk in response:
+    print(chunk.choices[0].delta.content, end="", flush=True)
 
-response = requests.post(
-    llm_server_url + "/client-side/chat/completions",
-    headers=header,
-    json=payload,
-    stream=True,
-)
-# print(response.json())
-# for message in response:
-#     print(message, end="", flush=True)
+# response = requests.post(
+#     llm_server_url + "/chat/completions",
+#     headers=header,
+#     json=payload,
+#     stream=True,
+# )
+# # print(response.json())
+# # for message in response:
+# #     print(message, end="", flush=True)
 
-if response.status_code == 200:
-    for line in response.iter_lines():
-        if line:
-            print(
-                json.loads(line.decode("utf-8")[6:])["choices"][0]["delta"]["content"],
-                end="",
-                flush=True,
-            )
-else:
-    print(response.json())
+# if response.status_code == 200:
+#     for line in response.iter_lines():
+#         if line:
+#             print(
+#                 json.loads(line.decode("utf-8")[6:])["choices"][0]["delta"]["content"],
+#                 end="",
+#                 flush=True,
+#             )
+# else:
+#     print(response.json())

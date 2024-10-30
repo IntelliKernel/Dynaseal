@@ -162,11 +162,11 @@ LLM_USER_ID = "671249a93f1cf2f8bf9b2b82"
   - header
     - bearer
   - response
-    - token: 动态 key，和 llm 服务端交互作为 dynasealtoken 请求头
+    - token: 动态 key，和 llm 服务端交互作为 Authorization 请求头
 
-- `llm_server_url/client-side/chat/completions`: 请求大模型，这个请求会校验端侧的请求，对于不合适的请求会抛出错误
+- `llm_server_url/chat/completions`: 请求大模型，这个请求会校验端侧的请求，对于不合适的请求会抛出错误
   - header
-    - dynasealtoken
+    - Authorization
   - body
     同 openai 格式
   - response
